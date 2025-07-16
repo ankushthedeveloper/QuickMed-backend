@@ -11,16 +11,26 @@ const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
-      return res.json({ success: false, meassage: "Missing Details" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing Details" });
     }
     if (!validator.isEmail(email)) {
-      return res.json({ success: false, meassage: "Enter a valid email" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Enter a valid email" });
     }
     if (password.length < 8) {
-      return res.json({
+      return res.status(400).json({
         success: false,
-        meassage: "Password should be of 8 characters",
+        message: "Password should be of 8 characters",
       });
+    }
+    const existingUser = await userModel.findOne({ email });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User already exists" });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -35,10 +45,10 @@ const registerUser = async (req, res) => {
     const newUser = new userModel(userData);
     const user = await newUser.save();
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-    res.json({ success: true, token });
+    res.status(201).json({ success: true, token });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -48,20 +58,22 @@ const loginUser = async (req, res) => {
     const user = await userModel.findOne({ email });
 
     if (!user) {
-      return res.json({ success: false, message: "User does not exists" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User does not exist" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
       const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-      res.json({ success: true, token });
+      res.status(200).json({ success: true, token });
     } else {
-      res.json({ success: false, message: "Invalid Credentials" });
+      res.status(401).json({ success: false, message: "Invalid Credentials" });
     }
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -69,10 +81,10 @@ const getProfile = async (req, res) => {
   try {
     const { userId } = req.body;
     const userData = await userModel.findById(userId).select("-password");
-    res.json({ success: true, userData });
+    res.status(200).json({ success: true, userData });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -82,7 +94,7 @@ const updateProfile = async (req, res) => {
     const imageFile = req.file;
 
     if (!name || !phone || !dob || !gender) {
-      return res.json({ success: false, message: "Data Missing" });
+      return res.status(400).json({ success: false, message: "Data Missing" });
     }
 
     await userModel.findByIdAndUpdate(userId, {
@@ -101,10 +113,10 @@ const updateProfile = async (req, res) => {
 
       await userModel.findByIdAndUpdate(userId, { image: imageURL });
     }
-    res.json({ success: true, message: "Profile Updated" });
+    res.status(200).json({ success: true, message: "Profile Updated" });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -114,13 +126,17 @@ const bookAppointment = async (req, res) => {
     const docData = await doctorModel.findById(docId).select("-password");
 
     if (!docData.available) {
-      return res.json({ success: false, message: "Doctor not available" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Doctor not available" });
     }
 
     let slots_booked = docData.slots_booked;
     if (slots_booked[slotDate]) {
       if (slots_booked[slotDate].includes(slotTime)) {
-        return res.json({ success: false, message: "Slot not available" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Slot not available" });
       } else {
         slots_booked[slotDate].push(slotTime);
       }
@@ -146,10 +162,10 @@ const bookAppointment = async (req, res) => {
     const newAppointment = new appointmentModel(appointmentData);
     await newAppointment.save();
     await doctorModel.findByIdAndUpdate(docId, { slots_booked });
-    res.json({ success: true, message: "Appointment Booked" });
+    res.status(201).json({ success: true, message: "Appointment Booked" });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -157,10 +173,10 @@ const listAppointment = async (req, res) => {
   try {
     const { userId } = req.body;
     const appointments = await appointmentModel.find({ userId });
-    res.json({ success: true, appointments });
+    res.status(200).json({ success: true, appointments });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -169,7 +185,9 @@ const cancelAppointment = async (req, res) => {
     const { userId, appointmentId } = req.body;
     const appointmentData = await appointmentModel.findById(appointmentId);
     if (appointmentData.userId.toString() !== userId) {
-      return res.json({ success: false, message: "Unauthorized action" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Unauthorized action" });
     }
     await appointmentModel.findByIdAndUpdate(appointmentId, {
       cancelled: true,
@@ -188,10 +206,10 @@ const cancelAppointment = async (req, res) => {
     }
 
     await doctorModel.findByIdAndUpdate(docId, { slots_booked });
-    res.json({ success: true, message: "Appointment Cancelled" });
+    res.status(200).json({ success: true, message: "Appointment Cancelled" });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
